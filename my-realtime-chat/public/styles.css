@@ -1,0 +1,15 @@
+body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f5f7fb}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.04);padding:16px}
+.row{display:flex;gap:12px;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+input,button,textarea{padding:10px;border-radius:10px;border:1px solid #d1d5db}
+button{cursor:pointer}
+#log{height:380px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa}
+.sys{color:#6b7280;font-style:italic}
+.me{font-weight:600}
+.msg{margin:6px 0}
+small{color:#6b7280}
+.pill{display:inline-block;padding:4px 8px;background:#eef2ff;border-radius:999px;font-size:12px;margin-right:6px}
+.side{display:flex;gap:12px}
+.side > div{flex:1}
