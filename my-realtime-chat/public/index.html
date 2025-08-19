@@ -4,18 +4,18 @@
   <meta charset="utf-8" />
   <title>Realtime Chat Pro — Phase A</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/styles.css?v=2" />
+  <link rel="stylesheet" href="/styles.css?v=3" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="wrap">
-    <!-- Header với user badge -->
+    <!-- Header -->
     <header class="topbar card">
       <h2>Realtime Chat Pro — Phase A</h2>
       <div id="userBadge" class="user-badge" aria-live="polite"></div>
     </header>
 
-    <!-- LAYOUT 2 cột chat/DM (không còn auth form) -->
+    <!-- 2 cột: Room & DM -->
     <div class="side">
       <!-- Cột phòng -->
       <div class="card">
@@ -25,7 +25,8 @@
           <span id="presence"></span>
         </div>
 
-        <div id="log"></div>
+        <!-- message list style mới -->
+        <div id="log" class="scrollbox"></div>
 
         <div class="row">
           <input id="text" placeholder="Tin nhắn..." />
@@ -51,113 +52,125 @@
   </div>
 
 <script>
-  // ---- Gate: nếu chưa có token → chuyển về trang login
+  /* ===== gate token & user badge ===== */
   const token = localStorage.getItem('chat_token');
-  if (!token) {
-    window.location.href = "/login.html";
-  }
+  if (!token) location.href = "/login.html";
 
-  // ---- Decode JWT (không verify; chỉ để đọc payload hiển thị)
   function parseJwt(tk){
-    try{
-      const p = tk.split('.')[1];
-      return JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/')));
-    }catch{ return null; }
+    try{ return JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    catch{ return null; }
   }
   const payload = parseJwt(token);
   const username = payload?.username || "User";
 
-  // ---- Render user badge
   function initials(name){
-    const x = name.trim().split(/[\s_]+/).slice(0,2).map(s=>s[0]||'').join('').toUpperCase();
-    return x || 'U';
+    return (name.trim().split(/[\s_]+/).slice(0,2).map(s=>s[0]).join('') || 'U').toUpperCase();
   }
   const userBadge = document.getElementById('userBadge');
   userBadge.innerHTML = `
     <div class="user">
-      <div class="avatar" aria-hidden="true">${initials(username)}</div>
-      <div class="who">
-        <strong>@${username}</strong>
-        <small>đang trực tuyến</small>
-      </div>
-      <button id="btnLogout" class="btn ghost small" title="Đăng xuất">Logout</button>
-    </div>
-  `;
-  document.getElementById('btnLogout').onclick = () => {
-    localStorage.removeItem('chat_token');
-    window.location.href = "/login.html";
-  };
+      <div class="avatar">${initials(username)}</div>
+      <div class="who"><strong>@${username}</strong><small>đang trực tuyến</small></div>
+      <button id="btnLogout" class="btn ghost small">Logout</button>
+    </div>`;
+  document.getElementById('btnLogout').onclick = ()=>{ localStorage.removeItem('chat_token'); location.href="/login.html"; };
 
-  // ---- Helpers DOM
+  /* ===== helpers ===== */
   const $ = s => document.querySelector(s);
-  const log = (el, html) => { el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; };
+  const fmtTime = ts => new Date((String(ts).length>10?ts:ts*1000)).toLocaleTimeString();
 
-  // ---- Kết nối Socket.IO với token
+  function addMessage(container, { from, text, ts, self=false }) {
+    const row = document.createElement('div');
+    row.className = `msg-row${self?' me':''}`;
+
+    const av = document.createElement('div');
+    av.className = 'avatar';
+    av.textContent = initials(from);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.innerHTML = `
+      <div class="meta">
+        <span class="name">${from}</span>
+        <span class="time">${fmtTime(ts || Date.now())}</span>
+      </div>
+      <div class="text"></div>
+    `;
+    bubble.querySelector('.text').textContent = text;
+
+    if(self){ row.appendChild(bubble); row.appendChild(av); }
+    else    { row.appendChild(av); row.appendChild(bubble); }
+
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  /* ===== socket ===== */
   let socket = io("/chat", { auth: { token } });
   let currentRoom = null;
 
-  socket.on("connect", ()=> {
-    // auto join phòng general lần đầu
-    const slug = $("#room").value.trim() || "general";
-    currentRoom = slug;
-    socket.emit("join_room", { slug });
+  socket.on("connect", ()=>{
+    currentRoom = $("#room").value.trim() || "general";
+    socket.emit("join_room", { slug: currentRoom });
   });
 
-  // ---- History/presence/typing
+  // lịch sử phòng khi join
   socket.on("history", ({slug, messages})=>{
-    if(slug===currentRoom){
-      $("#log").innerHTML = "";
-      for(const m of messages){
-        log($("#log"), `<div class="msg"><b>${m.fromUser}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
-      }
+    if(slug!==currentRoom) return;
+    $("#log").innerHTML = "";
+    for(const m of messages){
+      addMessage($("#log"), { from: m.fromUser, text: m.content, ts: m.ts, self: m.fromUser===username });
     }
   });
 
+  // tin nhắn phòng realtime
   socket.on("room_message", (m)=>{
-    if(m.slug===currentRoom){
-      log($("#log"), `<div class="msg"><b>${m.from}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
-    }
+    if(m.slug!==currentRoom) return;
+    addMessage($("#log"), { from: m.from, text: m.content, ts: m.ts, self: m.from===username });
   });
 
+  // presence
   socket.on("presence", ({slug, users})=>{
-    if(slug===currentRoom){
-      $("#presence").innerHTML = users.map(u=>`<span class="pill">${u}</span>`).join("");
-    }
+    if(slug!==currentRoom) return;
+    $("#presence").innerHTML = users.map(u=>`<span class="pill">${u}</span>`).join("");
   });
 
-  let typingTimer = null;
+  // typing mượt
+  let typingTimer=null;
   socket.on("typing", ({slug, from})=>{
-    if(slug===currentRoom){
-      $("#typing").textContent = `${from} đang gõ...`;
-      clearTimeout(typingTimer);
-      typingTimer = setTimeout(()=>$("#typing").textContent="", 1000);
-    }
+    if(slug!==currentRoom) return;
+    $("#typing").textContent = `${from} đang gõ...`;
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(()=>$("#typing").textContent="", 900);
   });
 
-  // ---- DM
+  // DM
   socket.on("dm_message", (m)=>{
-    log($("#dmLog"), `<div class="msg"><b>${m.from} → ${m.to||'you'}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
+    const self = m.from===username;
+    addMessage($("#dmLog"), { from: self?username:m.from, text: m.content, ts: m.ts, self });
   });
 
-  socket.on("delivered", ({id,tempId})=>{/* có thể đánh dấu trạng thái gửi theo tempId nếu muốn */});
+  socket.on("delivered", ({id,tempId})=>{/* có thể xử lý trạng thái gửi theo tempId nếu muốn */});
 
-  // ---- Actions
+  /* ===== actions ===== */
   $("#btnJoin").onclick = ()=>{
     const slug = $("#room").value.trim() || "general";
-    if (currentRoom) socket.emit("leave_room", { slug: currentRoom });
+    if(currentRoom) socket.emit("leave_room", { slug: currentRoom });
     currentRoom = slug;
     $("#log").innerHTML = "";
     socket.emit("join_room", { slug });
   };
 
   $("#text").addEventListener("input", ()=>{
-    if(currentRoom && socket) socket.emit("typing", { slug: currentRoom });
+    if(currentRoom) socket.emit("typing", { slug: currentRoom });
   });
 
   $("#btnSend").onclick = ()=>{
     const t = $("#text").value.trim();
     if(!t || !currentRoom) return;
     const tempId = crypto.randomUUID();
+    // render ngay ở client để thấy mượt
+    addMessage($("#log"), { from: username, text: t, ts: Date.now(), self: true });
     socket.emit("send_room", { slug: currentRoom, content: t, tempId });
     $("#text").value = "";
   };
@@ -167,6 +180,7 @@
     const t = $("#dmText").value.trim();
     if(!to || !t) return;
     const tempId = crypto.randomUUID();
+    addMessage($("#dmLog"), { from: username, text: t, ts: Date.now(), self: true });
     socket.emit("send_dm", { toUsername: to, content: t, tempId });
     $("#dmText").value = "";
   };

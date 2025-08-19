@@ -236,3 +236,37 @@ a:hover{ text-decoration: underline }
 /* Toast-like success/error (nếu muốn dùng cùng .msg) */
 .msg.ok{ color: var(--ok) }
 .msg.err{ color: var(--err) }
+/* --- Chat bubble UI --- */
+.msg-row{
+  display:flex; align-items:flex-end; gap:10px; margin:10px 0;
+  animation: fadeInUp .25s var(--ease);
+}
+.msg-row.me{ justify-content:flex-end; }
+.msg-row.me .avatar{ order:2 }
+.msg-row.me .bubble{ order:1; background: var(--primary); color:#fff }
+
+.msg-row .avatar{
+  width:36px; height:36px; border-radius:50%;
+  display:grid; place-items:center; font-weight:700; color:#fff;
+  background: conic-gradient(from 180deg, var(--primary), var(--primary-2), var(--primary));
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  flex-shrink:0;
+}
+
+.bubble{
+  max-width:72%;
+  padding:10px 14px; border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--bg-elev) 90%, #000 10%);
+  box-shadow: var(--shadow-1);
+  display:flex; flex-direction:column; gap:4px;
+}
+.msg-row:not(.me) .bubble{ border-bottom-left-radius:6px; }
+.msg-row.me .bubble{ border-bottom-right-radius:6px; }
+
+.meta{ display:flex; justify-content:space-between; font-size:11px; color: var(--muted); }
+.meta .name{ font-weight:600 }
+.meta .time{ font-style:italic }
+
+.bubble .text{ font-size:14px; line-height:1.45; word-wrap:break-word; }
+
+@keyframes fadeInUp{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
