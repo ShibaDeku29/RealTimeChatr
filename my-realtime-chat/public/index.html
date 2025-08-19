@@ -2,35 +2,31 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <title>Realtime Chat Pro (Phase A)</title>
+  <title>Realtime Chat Pro — Phase A</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="wrap">
-    <h2>Realtime Chat Pro — Phase A</h2>
+    <!-- Header với user badge -->
+    <header class="topbar card">
+      <h2>Realtime Chat Pro — Phase A</h2>
+      <div id="userBadge" class="user-badge" aria-live="polite"></div>
+    </header>
 
-    <div id="auth" class="card">
-      <div class="row">
-        <input id="username" placeholder="username (a-z0-9_)" />
-        <input id="password" placeholder="password" type="password" />
-        <button id="btnRegister">Đăng ký</button>
-        <button id="btnLogin">Đăng nhập</button>
-      </div>
-      <small id="authMsg" class="sys"></small>
-    </div>
-
-    <br/>
-
+    <!-- LAYOUT 2 cột chat/DM (không còn auth form) -->
     <div class="side">
+      <!-- Cột phòng -->
       <div class="card">
         <div class="row">
           <input id="room" placeholder="slug phòng (vd: general)" value="general"/>
           <button id="btnJoin">Join room</button>
           <span id="presence"></span>
         </div>
+
         <div id="log"></div>
+
         <div class="row">
           <input id="text" placeholder="Tin nhắn..." />
           <button id="btnSend">Gửi</button>
@@ -38,12 +34,13 @@
         <small id="typing" class="sys"></small>
       </div>
 
+      <!-- Cột DM -->
       <div class="card">
         <div class="col">
           <div class="row">
             <input id="dmUser" placeholder="DM tới username..." />
           </div>
-          <div id="dmLog" style="height:380px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa"></div>
+          <div id="dmLog" class="scrollbox"></div>
           <div class="row">
             <input id="dmText" placeholder="Tin nhắn DM..." />
             <button id="btnSendDm">Gửi DM</button>
@@ -51,121 +48,128 @@
         </div>
       </div>
     </div>
-
   </div>
 
-  <script>
-     const tokenFromStorage = localStorage.getItem('chat_token');
-    if(!tokenFromStorage){ window.location.href = "/login.html"; }
-    // --- Helper DOM ---
-    const $ = s => document.querySelector(s);
-    const log = (el, html) => { el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; };
+<script>
+  // ---- Gate: nếu chưa có token → chuyển về trang login
+  const token = localStorage.getItem('chat_token');
+  if (!token) {
+    window.location.href = "/login.html";
+  }
 
-    // --- State ---
-    let token = null;
-    let socket = null;
-    let currentRoom = null;
+  // ---- Decode JWT (không verify; chỉ để đọc payload hiển thị)
+  function parseJwt(tk){
+    try{
+      const p = tk.split('.')[1];
+      return JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/')));
+    }catch{ return null; }
+  }
+  const payload = parseJwt(token);
+  const username = payload?.username || "User";
 
-    // --- REST base ---
-    async function post(url, body){
-      const res = await fetch(url, {
-        method:'POST',
-        headers:{'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{})},
-        body: JSON.stringify(body)
-      });
-      return res.json();
-    }
-    async function get(url){
-      const res = await fetch(url, { headers: token?{Authorization:'Bearer '+token}:{}} );
-      return res.json();
-    }
+  // ---- Render user badge
+  function initials(name){
+    const x = name.trim().split(/[\s_]+/).slice(0,2).map(s=>s[0]||'').join('').toUpperCase();
+    return x || 'U';
+  }
+  const userBadge = document.getElementById('userBadge');
+  userBadge.innerHTML = `
+    <div class="user">
+      <div class="avatar" aria-hidden="true">${initials(username)}</div>
+      <div class="who">
+        <strong>@${username}</strong>
+        <small>đang trực tuyến</small>
+      </div>
+      <button id="btnLogout" class="btn ghost small" title="Đăng xuất">Logout</button>
+    </div>
+  `;
+  document.getElementById('btnLogout').onclick = () => {
+    localStorage.removeItem('chat_token');
+    window.location.href = "/login.html";
+  };
 
-    // --- Auth ---
-    $("#btnRegister").onclick = async () => {
-      const r = await post('/auth/register', { username: $("#username").value.trim(), password: $("#password").value });
-      if(r.token){ token = r.token; $("#authMsg").textContent = "Đăng ký OK. Token đã nhận."; connectSocket(); }
-      else $("#authMsg").textContent = r.error || "Lỗi đăng ký";
-    };
-    $("#btnLogin").onclick = async () => {
-      const r = await post('/auth/login', { username: $("#username").value.trim(), password: $("#password").value });
-      if(r.token){ token = r.token; $("#authMsg").textContent = "Đăng nhập OK. Token đã nhận."; connectSocket(); }
-      else $("#authMsg").textContent = r.error || "Lỗi đăng nhập";
-    };
+  // ---- Helpers DOM
+  const $ = s => document.querySelector(s);
+  const log = (el, html) => { el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; };
 
-    // --- Socket ---
-    function connectSocket(){
-      if(!token) return;
-      if(socket) socket.disconnect();
-      socket = io("/chat", { auth:{ token } });
+  // ---- Kết nối Socket.IO với token
+  let socket = io("/chat", { auth: { token } });
+  let currentRoom = null;
 
-      socket.on("connect", ()=> { $("#authMsg").textContent = "Socket connected."; });
+  socket.on("connect", ()=> {
+    // auto join phòng general lần đầu
+    const slug = $("#room").value.trim() || "general";
+    currentRoom = slug;
+    socket.emit("join_room", { slug });
+  });
 
-      socket.on("history", ({slug, messages})=>{
-        if(slug===currentRoom){
-          $("#log").innerHTML = "";
-          for(const m of messages){
-            log($("#log"), `<div class="msg"><b>${m.fromUser}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
-          }
-        }
-      });
-
-      socket.on("room_message", (m)=>{
-        if(m.slug===currentRoom){
-          log($("#log"), `<div class="msg"><b>${m.from}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
-        }
-      });
-
-      socket.on("presence", ({slug, users})=>{
-        if(slug===currentRoom){
-          $("#presence").innerHTML = users.map(u=>`<span class="pill">${u}</span>`).join("");
-        }
-      });
-
-      let typingTimer = null;
-      socket.on("typing", ({slug, from})=>{
-        if(slug===currentRoom){
-          $("#typing").textContent = `${from} đang gõ...`;
-          clearTimeout(typingTimer);
-          typingTimer = setTimeout(()=>$("#typing").textContent="", 1000);
-        }
-      });
-
-      socket.on("dm_message", (m)=>{
-        log($("#dmLog"), `<div class="msg"><b>${m.from} → ${m.to||'you'}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
-      });
-
-      socket.on("delivered", ({id,tempId})=>{
-        // có thể đánh dấu UI theo tempId nếu muốn
-      });
-    }
-
-    // --- Room actions ---
-    $("#btnJoin").onclick = async ()=>{
-      const slug = $("#room").value.trim() || "general";
-      currentRoom = slug;
+  // ---- History/presence/typing
+  socket.on("history", ({slug, messages})=>{
+    if(slug===currentRoom){
       $("#log").innerHTML = "";
-      socket.emit("join_room", { slug });
-    };
-    $("#text").addEventListener("input", ()=>{
-      if(currentRoom && socket) socket.emit("typing", { slug: currentRoom });
-    });
-    $("#btnSend").onclick = ()=>{
-      const t = $("#text").value.trim();
-      if(!t || !currentRoom) return;
-      const tempId = crypto.randomUUID();
-      socket.emit("send_room", { slug: currentRoom, content: t, tempId });
-      $("#text").value = "";
-    };
+      for(const m of messages){
+        log($("#log"), `<div class="msg"><b>${m.fromUser}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
+      }
+    }
+  });
 
-    // --- DM actions ---
-    $("#btnSendDm").onclick = ()=>{
-      const to = $("#dmUser").value.trim();
-      const t = $("#dmText").value.trim();
-      if(!to || !t) return;
-      const tempId = crypto.randomUUID();
-      socket.emit("send_dm", { toUsername: to, content: t, tempId });
-      $("#dmText").value = "";
-    };
-  </script>
+  socket.on("room_message", (m)=>{
+    if(m.slug===currentRoom){
+      log($("#log"), `<div class="msg"><b>${m.from}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
+    }
+  });
+
+  socket.on("presence", ({slug, users})=>{
+    if(slug===currentRoom){
+      $("#presence").innerHTML = users.map(u=>`<span class="pill">${u}</span>`).join("");
+    }
+  });
+
+  let typingTimer = null;
+  socket.on("typing", ({slug, from})=>{
+    if(slug===currentRoom){
+      $("#typing").textContent = `${from} đang gõ...`;
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(()=>$("#typing").textContent="", 1000);
+    }
+  });
+
+  // ---- DM
+  socket.on("dm_message", (m)=>{
+    log($("#dmLog"), `<div class="msg"><b>${m.from} → ${m.to||'you'}</b>: ${m.content} <small>@${new Date(m.ts*1000).toLocaleTimeString()}</small></div>`);
+  });
+
+  socket.on("delivered", ({id,tempId})=>{/* có thể đánh dấu trạng thái gửi theo tempId nếu muốn */});
+
+  // ---- Actions
+  $("#btnJoin").onclick = ()=>{
+    const slug = $("#room").value.trim() || "general";
+    if (currentRoom) socket.emit("leave_room", { slug: currentRoom });
+    currentRoom = slug;
+    $("#log").innerHTML = "";
+    socket.emit("join_room", { slug });
+  };
+
+  $("#text").addEventListener("input", ()=>{
+    if(currentRoom && socket) socket.emit("typing", { slug: currentRoom });
+  });
+
+  $("#btnSend").onclick = ()=>{
+    const t = $("#text").value.trim();
+    if(!t || !currentRoom) return;
+    const tempId = crypto.randomUUID();
+    socket.emit("send_room", { slug: currentRoom, content: t, tempId });
+    $("#text").value = "";
+  };
+
+  $("#btnSendDm").onclick = ()=>{
+    const to = $("#dmUser").value.trim();
+    const t = $("#dmText").value.trim();
+    if(!to || !t) return;
+    const tempId = crypto.randomUUID();
+    socket.emit("send_dm", { toUsername: to, content: t, tempId });
+    $("#dmText").value = "";
+  };
+</script>
 </body>
 </html>
