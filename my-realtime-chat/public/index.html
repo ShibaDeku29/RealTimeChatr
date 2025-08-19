@@ -4,55 +4,70 @@
   <meta charset="utf-8" />
   <title>Realtime Chat Pro — Phase A</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/styles.css?v=3" />
+  <link rel="stylesheet" href="/styles.css?v=4" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="wrap">
     <!-- Header -->
     <header class="topbar card">
-      <h2>Realtime Chat Pro — Phase A</h2>
+      <div class="brand">
+        <div class="spark"></div>
+        <h2>Realtime Chat Pro — Phase A</h2>
+      </div>
       <div id="userBadge" class="user-badge" aria-live="polite"></div>
     </header>
 
     <!-- 2 cột: Room & DM -->
     <div class="side">
-      <!-- Cột phòng -->
-      <div class="card">
-        <div class="row">
-          <input id="room" placeholder="slug phòng (vd: general)" value="general"/>
-          <button id="btnJoin">Join room</button>
-          <span id="presence"></span>
+      <!-- Phòng -->
+      <section class="card chat-panel">
+        <!-- NEW: room toolbar -->
+        <div class="toolbar">
+          <div class="room-pill">
+            <input id="room" class="room-input" placeholder="slug phòng (vd: general)" value="general"/>
+            <button id="btnJoin" class="btn ghost"><span>Join</span></button>
+          </div>
+          <div id="presence" class="presence"></div>
         </div>
 
-        <!-- message list style mới -->
-        <div id="log" class="scrollbox"></div>
+        <!-- NEW: message list -->
+        <div id="log" class="scrollbox chatbox"></div>
 
-        <div class="row">
-          <input id="text" placeholder="Tin nhắn..." />
-          <button id="btnSend">Gửi</button>
+        <!-- NEW: sticky composer -->
+        <div class="composer">
+          <input id="text" placeholder="Viết gì đó..." />
+          <button id="btnSend" class="btn icon" title="Gửi">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M22 2L11 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M22 2L15 22l-4-9-9-4 20-7Z" fill="currentColor"/>
+            </svg>
+          </button>
         </div>
         <small id="typing" class="sys"></small>
-      </div>
+      </section>
 
-      <!-- Cột DM -->
-      <div class="card">
-        <div class="col">
-          <div class="row">
-            <input id="dmUser" placeholder="DM tới username..." />
-          </div>
-          <div id="dmLog" class="scrollbox"></div>
-          <div class="row">
-            <input id="dmText" placeholder="Tin nhắn DM..." />
-            <button id="btnSendDm">Gửi DM</button>
-          </div>
+      <!-- DM -->
+      <section class="card chat-panel">
+        <div class="toolbar">
+          <input id="dmUser" class="to-input" placeholder="DM tới username..." />
         </div>
-      </div>
+        <div id="dmLog" class="scrollbox chatbox"></div>
+        <div class="composer">
+          <input id="dmText" placeholder="Tin nhắn DM..." />
+          <button id="btnSendDm" class="btn icon" title="Gửi DM">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M22 2L11 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M22 2L15 22l-4-9-9-4 20-7Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 
 <script>
-  /* ===== gate token & user badge ===== */
+  /* ===== token & badge ===== */
   const token = localStorage.getItem('chat_token');
   if (!token) location.href = "/login.html";
 
@@ -63,9 +78,7 @@
   const payload = parseJwt(token);
   const username = payload?.username || "User";
 
-  function initials(name){
-    return (name.trim().split(/[\s_]+/).slice(0,2).map(s=>s[0]).join('') || 'U').toUpperCase();
-  }
+  const initials = (n)=> (n.trim().split(/[\s_]+/).slice(0,2).map(s=>s[0]).join('')||'U').toUpperCase();
   const userBadge = document.getElementById('userBadge');
   userBadge.innerHTML = `
     <div class="user">
@@ -77,9 +90,31 @@
 
   /* ===== helpers ===== */
   const $ = s => document.querySelector(s);
-  const fmtTime = ts => new Date((String(ts).length>10?ts:ts*1000)).toLocaleTimeString();
+  const fmtTime = ts => new Date((String(ts).length>10?ts:ts*1000)).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+  // day separator
+  let lastDayKeyRoom = "", lastDayKeyDM = "";
+  const dayKey = ts => {
+    const d = new Date((String(ts).length>10?ts:ts*1000));
+    return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  };
+  function addSeparator(container, ts){
+    const d = new Date((String(ts).length>10?ts:ts*1000));
+    const label = d.toLocaleDateString([], {year:'numeric', month:'short', day:'numeric'});
+    const sep = document.createElement('div');
+    sep.className = 'day-sep';
+    sep.innerHTML = `<span>${label}</span>`;
+    container.appendChild(sep);
+  }
 
   function addMessage(container, { from, text, ts, self=false }) {
+    const currentKey = dayKey(ts || Date.now());
+    if(container.id==='log'){
+      if (currentKey !== lastDayKeyRoom){ addSeparator(container, ts||Date.now()); lastDayKeyRoom = currentKey; }
+    } else {
+      if (currentKey !== lastDayKeyDM){ addSeparator(container, ts||Date.now()); lastDayKeyDM = currentKey; }
+    }
+
     const row = document.createElement('div');
     row.className = `msg-row${self?' me':''}`;
 
@@ -95,6 +130,7 @@
         <span class="time">${fmtTime(ts || Date.now())}</span>
       </div>
       <div class="text"></div>
+      <span class="tail" aria-hidden="true"></span>
     `;
     bubble.querySelector('.text').textContent = text;
 
@@ -114,28 +150,24 @@
     socket.emit("join_room", { slug: currentRoom });
   });
 
-  // lịch sử phòng khi join
   socket.on("history", ({slug, messages})=>{
     if(slug!==currentRoom) return;
-    $("#log").innerHTML = "";
+    $("#log").innerHTML = ""; lastDayKeyRoom = "";
     for(const m of messages){
       addMessage($("#log"), { from: m.fromUser, text: m.content, ts: m.ts, self: m.fromUser===username });
     }
   });
 
-  // tin nhắn phòng realtime
   socket.on("room_message", (m)=>{
     if(m.slug!==currentRoom) return;
     addMessage($("#log"), { from: m.from, text: m.content, ts: m.ts, self: m.from===username });
   });
 
-  // presence
   socket.on("presence", ({slug, users})=>{
     if(slug!==currentRoom) return;
-    $("#presence").innerHTML = users.map(u=>`<span class="pill">${u}</span>`).join("");
+    $("#presence").innerHTML = users.map(u=>`<span class="chip">${u}</span>`).join("");
   });
 
-  // typing mượt
   let typingTimer=null;
   socket.on("typing", ({slug, from})=>{
     if(slug!==currentRoom) return;
@@ -144,20 +176,17 @@
     typingTimer = setTimeout(()=>$("#typing").textContent="", 900);
   });
 
-  // DM
   socket.on("dm_message", (m)=>{
     const self = m.from===username;
     addMessage($("#dmLog"), { from: self?username:m.from, text: m.content, ts: m.ts, self });
   });
-
-  socket.on("delivered", ({id,tempId})=>{/* có thể xử lý trạng thái gửi theo tempId nếu muốn */});
 
   /* ===== actions ===== */
   $("#btnJoin").onclick = ()=>{
     const slug = $("#room").value.trim() || "general";
     if(currentRoom) socket.emit("leave_room", { slug: currentRoom });
     currentRoom = slug;
-    $("#log").innerHTML = "";
+    $("#log").innerHTML = ""; lastDayKeyRoom = "";
     socket.emit("join_room", { slug });
   };
 
@@ -169,7 +198,6 @@
     const t = $("#text").value.trim();
     if(!t || !currentRoom) return;
     const tempId = crypto.randomUUID();
-    // render ngay ở client để thấy mượt
     addMessage($("#log"), { from: username, text: t, ts: Date.now(), self: true });
     socket.emit("send_room", { slug: currentRoom, content: t, tempId });
     $("#text").value = "";
