@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>Đăng nhập — Realtime Chat Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login.css" />
+</head>
+<body>
+  <canvas id="bg"></canvas>
+
+  <main class="shell">
+    <section class="card">
+      <div class="brand">
+        <div class="logo">🗨️</div>
+        <div class="meta">
+          <h1>Realtime Chat Pro</h1>
+          <p>Mượt, nhanh, bảo mật vừa đủ.</p>
+        </div>
+      </div>
+
+      <form id="authForm" novalidate>
+        <div class="field">
+          <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="24" pattern="[a-zA-Z0-9_]+" />
+          <label for="username">Username</label>
+          <span class="hint">Chỉ chữ, số, dấu gạch dưới. 3–24 ký tự.</span>
+        </div>
+
+        <div class="field">
+          <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6" maxlength="100" />
+          <label for="password">Mật khẩu</label>
+          <button type="button" class="eye" id="togglePass" aria-label="Show/Hide password">👁️</button>
+          <span class="hint">Tối thiểu 6 ký tự.</span>
+        </div>
+
+        <div class="actions">
+          <button id="btnLogin" class="btn primary" type="submit">Đăng nhập</button>
+          <button id="btnRegister" class="btn ghost" type="button">Đăng ký</button>
+        </div>
+
+        <p id="msg" class="msg" role="alert" aria-live="polite"></p>
+      </form>
+
+      <footer class="foot">
+        <a href="#" id="toChat" class="link">Vào chat (nếu đã có token)</a>
+      </footer>
+    </section>
+  </main>
+
+  <script src="/login.js"></script>
+</body>
+</html>

@@ -55,6 +55,8 @@
   </div>
 
   <script>
+     const tokenFromStorage = localStorage.getItem('chat_token');
+    if(!tokenFromStorage){ window.location.href = "/login.html"; }
     // --- Helper DOM ---
     const $ = s => document.querySelector(s);
     const log = (el, html) => { el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; };

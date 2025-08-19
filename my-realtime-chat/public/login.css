@@ -1,0 +1,80 @@
+:root{
+  --bg1:#0f172a; --bg2:#1e293b; --glow:#93c5fd; --accent:#6366f1; --ok:#22c55e; --err:#ef4444;
+  --card:#0b1220cc; --stroke:#334155cc; --text:#e5e7eb; --muted:#94a3b8;
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;color:var(--text);background:radial-gradient(1200px 600px at 10% 10%,#1f2937 0%,#0b1020 50%,#05070b 100%)}
+/* animated gradient backdrop via canvas */
+#bg{position:fixed;inset:0;z-index:-1}
+
+.shell{min-height:100%;display:grid;place-items:center;padding:24px}
+.card{
+  width:min(520px,92vw); padding:28px; border-radius:24px;
+  background:linear-gradient(180deg, #0b1220aa, #0b1220dd);
+  box-shadow:0 10px 40px #0007, inset 0 0 0 1px #ffffff0d, 0 0 0 1px #ffffff14;
+  backdrop-filter: blur(10px); border:1px solid var(--stroke);
+  animation: yIn .6s ease-out both;
+}
+@keyframes yIn{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.logo{
+  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#1d4ed8,#9333ea); font-size:22px; box-shadow:0 10px 20px #0006;
+}
+.brand h1{margin:0;font-size:22px;font-weight:700}
+.brand p{margin:2px 0 0 0;color:var(--muted);font-size:13px}
+
+form{display:flex;flex-direction:column;gap:18px}
+.field{position:relative}
+.field input{
+  width:100%; padding:16px 46px 14px 14px; border-radius:14px;
+  border:1px solid var(--stroke); background: #0a1020bf; color:var(--text);
+  outline:none; transition:border .2s, box-shadow .2s, background .2s;
+}
+.field input:focus{border-color:#7dd3fc; box-shadow:0 0 0 4px #38bdf81f; background:#0b1324}
+.field label{
+  position:absolute; left:14px; top:12px; color:var(--muted); font-size:14px; pointer-events:none;
+  transition:all .2s ease;
+}
+.field input:focus + label,
+.field input:not(:placeholder-shown) + label{
+  top:-8px; left:12px; font-size:12px; background:#0b1220; padding:2px 6px; border-radius:999px; color:#c7d2fe;
+  box-shadow:0 0 0 1px #ffffff0e;
+}
+.field .hint{display:block;color:var(--muted);font-size:12px;margin-top:6px}
+.eye{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  border:none; background:transparent; font-size:16px; cursor:pointer; color:#cbd5e1;
+}
+
+.actions{display:flex;gap:10px;align-items:center}
+.btn{
+  padding:12px 16px; border-radius:12px; border:1px solid var(--stroke);
+  background:#0a1020; color:var(--text); cursor:pointer; transition:transform .05s ease, background .2s, border-color .2s;
+}
+.btn:hover{background:#0b1324;border-color:#475569}
+.btn:active{transform:translateY(1px)}
+.btn.primary{
+  border:none; background:linear-gradient(135deg,#4f46e5,#06b6d4); font-weight:600;
+  box-shadow:0 10px 20px #0006, 0 0 0 1px #ffffff20 inset;
+}
+.btn.primary.loading{position:relative; pointer-events:none; opacity:.9}
+.btn.primary.loading::after{
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  background:linear-gradient(90deg, #ffffff08 0%, transparent 20%, transparent 80%, #ffffff08 100%);
+  animation: shimmer 1.3s linear infinite;
+}
+@keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}}
+
+.msg{min-height:20px;margin:6px 2px 0;color:var(--muted)}
+.msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
+
+.foot{margin-top:10px;display:flex;justify-content:flex-end}
+.link{color:#93c5fd;text-decoration:none}
+.link:hover{text-decoration:underline}
+
+@media (max-width:520px){
+  .card{padding:22px}
+  .brand h1{font-size:20px}
+}
